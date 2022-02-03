@@ -1,140 +1,110 @@
-from django.db import models
-from edc_base.model_fields import OtherCharField
-from edc_constants.choices import YES_NO
+from itertools import chain
 
-from ..choices import HIGHEST_EDUCATION, MARKS, NUMBER_OF_DAYS, OVERALL_MARKS
-from .child_crf_model_mixin import ChildCrfModelMixin
+from django import forms
+from django.db.models import ManyToManyField
+from edc_constants.constants import NO, YES
+from flourish_child_validations.form_validators import AcademicPerformanceFormValidator
+from django.apps import apps as django_apps
+from flourish_child.choices import HIGHEST_EDUCATION
+from flourish_child.models import child_socio_demographic
+
+from ..models import AcademicPerformance
+from .child_form_mixin import ChildModelFormMixin
 
 
-class AcademicPerformance(ChildCrfModelMixin):
+class AcademicPerformanceForm(ChildModelFormMixin):
 
-    education_level = models.CharField(
-        choices=HIGHEST_EDUCATION,
-        verbose_name="What level/class of school is the child currently in?",
-        max_length=20,
-    )
+    form_validator_cls = AcademicPerformanceFormValidator
 
-    education_level_other = OtherCharField(verbose_name="Specify other", max_length=30)
+    education_level = forms.CharField(
+        label='What level/class of school is the child currently in?',
+        widget=forms.TextInput(attrs={'readonly': 'readonly'}))
 
-    mathematics_marks = models.CharField(
-        verbose_name="What are your marks in Mathematics?",
-        max_length=25,
-        choices=MARKS,
-        default="not_taking_subject",
-    )
+    def __init__(self, *args, **kwargs):
+        initial = kwargs.pop("initial", {})
+        instance = kwargs.get("instance")
+        previous_instance = getattr(self, "previous_instance", None)
 
-    science_marks = models.CharField(
-        verbose_name="What are your marks in Science?",
-        max_length=25,
-        choices=MARKS,
-        default="not_taking_subject",
-    )
+        if not instance and previous_instance:
+            for key in self.base_fields.keys():
+                if key not in ["child_visit", "report_datetime",]:
+                    initial[key] = getattr(previous_instance, key)
+        kwargs["initial"] = initial
+        super().__init__(*args, **kwargs)
 
-    setswana_marks = models.CharField(
-        verbose_name="What are your marks in Setswana?",
-        max_length=25,
-        choices=MARKS,
-        default="not_taking_subject",
-    )
+        subject_identifier = kwargs.get('subject_identifier', None)
+        if subject_identifier:
+            child_demographic = self.childsociodemographic_cls.get(child_visit__subject_identifier=subject_identifier)
+            self.initial['education_level'] = 'hello'
 
-    english_marks = models.CharField(
-        verbose_name="What are your marks in English?",
-        max_length=25,
-        choices=MARKS,
-        default="not_taking_subject",
-    )
+    
+    def childsociodemographic_cls(self):
+        return django_apps.get_model('flourish_child.childsociodemographic')
+        
 
-    physical_edu_marks = models.CharField(
-        verbose_name="What are your marks in Physical Education?",
-        max_length=25,
-        choices=MARKS,
-        default="not_taking_subject",
-    )
+    def clean(self):
+        previous_instance = getattr(self, "previous_instance", None)
+        has_changed = self.compare_instance_fields(previous_instance)
 
-    cultural_stds_marks = models.CharField(
-        verbose_name="What are your marks in Cultural Studies?",
-        max_length=25,
-        choices=MARKS,
-        default="not_taking_subject",
-    )
+        academic_perf_changed = self.cleaned_data.get("academic_perf_changed")
+        if academic_perf_changed:
+            if academic_perf_changed == YES and not has_changed:
+                message = {
+                    "academic_perf_changed": "Participant's academic performance  information has changed since"
+                    " last visit. Please update the information on this form."
+                }
+                raise forms.ValidationError(message)
+            elif academic_perf_changed == NO and has_changed:
+                message = {
+                    "academic_perf_changed": "Participant's academic performance information has not changed "
+                    "since last visit. Please don't make any changes to this form."
+                }
+                raise forms.ValidationError(message)
+        cleaned_data = super().clean()
+        return cleaned_data
 
-    social_stds_marks = models.CharField(
-        verbose_name="What are your marks in Social Studies?",
-        max_length=25,
-        choices=MARKS,
-        default="not_taking_subject",
-    )
+    def compare_instance_fields(self, prev_instance=None):
+        exclude_fields = [
+            "modified",
+            "created",
+            "user_created",
+            "user_modified",
+            "hostname_created",
+            "hostname_modified",
+            "device_created",
+            "device_modified",
+            "report_datetime",
+            "child_visit",
+            "academic_perf_changed",
+        ]
+        if prev_instance:
+            other_values = self.model_to_dict(prev_instance, exclude=exclude_fields)
+            values = {
+                key: self.data.get(key) or "not_taking_subject"
+                for key in other_values.keys()
+            }
+            if self.data.get("grade_points") == "":
+                values["grade_points"] = None
+            values["education_level_other"] = self.data.get("education_level_other")
+            if values.get("grade_points"):
+                values["grade_points"] = int(values.get("grade_points"))
+            return values != other_values
+        return False
 
-    agriculture_marks = models.CharField(
-        verbose_name="What are your marks in Agriculture?",
-        max_length=25,
-        choices=MARKS,
-        default="not_taking_subject",
-    )
+    def model_to_dict(self, instance, exclude):
+        opts = instance._meta
+        data = {}
+        for f in chain(opts.concrete_fields, opts.private_fields, opts.many_to_many):
+            if not getattr(f, "editable", False):
+                continue
+            if exclude and f.name in exclude:
+                continue
+            if isinstance(f, ManyToManyField):
+                data[f.name] = [str(obj.id) for obj in f.value_from_object(instance)]
+                continue
+            data[f.name] = f.value_from_object(instance) or None
+        return data
 
-    single_scie_marks = models.CharField(
-        verbose_name="What are your marks in Single Science?",
-        max_length=25,
-        choices=MARKS,
-        default="not_taking_subject",
-    )
-
-    biology_marks = models.CharField(
-        verbose_name="What are your marks in Biology?",
-        max_length=25,
-        choices=MARKS,
-        default="not_taking_subject",
-    )
-
-    chemistry_marks = models.CharField(
-        verbose_name="What are your marks in Chemistry?",
-        max_length=25,
-        choices=MARKS,
-        default="not_taking_subject",
-    )
-
-    physics_marks = models.CharField(
-        verbose_name="What are your marks in Physics?",
-        max_length=25,
-        choices=MARKS,
-        default="not_taking_subject",
-    )
-
-    double_scie_marks = models.CharField(
-        verbose_name="What are your marks in Double Science?",
-        max_length=25,
-        choices=MARKS,
-        default="not_taking_subject",
-    )
-
-    overall_performance = models.CharField(
-        verbose_name="What is your overall performance in your last examination?",
-        max_length=25,
-        choices=OVERALL_MARKS,
-    )
-
-    grade_points = models.PositiveIntegerField(
-        verbose_name="Overall grade points", blank=True, null=True
-    )
-
-    num_days = models.CharField(
-        verbose_name="How many days a week do you attend in-person classes?",
-        max_length=10,
-        choices=NUMBER_OF_DAYS,
-    )
-
-    """Quartely phone calls stem question"""
-    academic_perf_changed = models.CharField(
-        verbose_name=(
-            "Has any of your subject marks or overall performance in your last "
-            "examination changed?"
-        ),
-        max_length=3,
-        choices=YES_NO,
-        null=True,
-    )
-
-    class Meta(ChildCrfModelMixin.Meta):
-        app_label = "flourish_child"
-        verbose_name = "Academic Performance"
-        verbose_name_plural = "Academic Performance"
+    class Meta:
+        model = AcademicPerformance
+        fields = "__all__"
