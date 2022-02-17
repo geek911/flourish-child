@@ -764,3 +764,15 @@ VACCINATION_TYPE = (
     ('johnson_and_johnson', 'Johnson & Johnson '),
     (OTHER, 'Other')
 )
+
+STUDY_SITES = (
+    ('40', 'Gaborone'),
+)
+
+REASON_NOT_DRAWN = (
+    ('collection_failed', 'Tried, but unable to obtain sample from patient'),
+    ('absent', 'Patient did not attend visit'),
+    ('refused', 'Patient refused'),
+    ('no_supplies', 'No supplies'),
+    (OTHER, 'Other'),
+    (NOT_APPLICABLE, 'Not Applicable'))
