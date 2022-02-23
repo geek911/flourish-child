@@ -21,20 +21,20 @@ from edc_visit_tracking.model_mixins import PreviousVisitModelMixin
 
 from ..choices import STUDY_SITES, REASON_NOT_DRAWN
 from .child_visit import ChildVisit
-from .model_mixins import SearchSlugModelMixin
+from .model_mixins import SearchSlugModelMixin, ConsentVersionModelModelMixin
 
 
-class Manager(VisitTrackingCrfModelManager, SearchSlugManager):
+class ChildRequisitionManager(VisitTrackingCrfModelManager, SearchSlugManager):
     pass
 
 
 class ChildRequisition(
-        NonUniqueSubjectIdentifierFieldMixin,
-        RequisitionModelMixin, RequisitionStatusMixin, RequisitionIdentifierMixin,
-        VisitTrackingCrfModelMixin, SubjectScheduleCrfModelMixin,
-        RequiresConsentFieldsModelMixin, PreviousVisitModelMixin,
-        RequisitionReferenceModelMixin, UpdatesRequisitionMetadataModelMixin,
-        SearchSlugModelMixin, BaseUuidModel):
+        NonUniqueSubjectIdentifierFieldMixin, ConsentVersionModelModelMixin,
+        RequisitionModelMixin, RequisitionStatusMixin,
+        RequisitionIdentifierMixin, VisitTrackingCrfModelMixin,
+        SubjectScheduleCrfModelMixin, RequiresConsentFieldsModelMixin,
+        PreviousVisitModelMixin, RequisitionReferenceModelMixin,
+        UpdatesRequisitionMetadataModelMixin, SearchSlugModelMixin, BaseUuidModel):
 
     lab_profile_name = 'flourish_child_lab_profile'
 
@@ -77,9 +77,7 @@ class ChildRequisition(
         null=True,
         blank=True)
 
-#     on_site = CurrentSiteManager()
-
-    objects = Manager()
+    objects = ChildRequisitionManager()
 
     history = HistoricalRecords()
 
@@ -105,4 +103,5 @@ class ChildRequisition(
         return fields
 
     class Meta:
+        app_label = 'flourish_child'
         unique_together = ('panel', 'child_visit')

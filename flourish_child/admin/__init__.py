@@ -38,3 +38,4 @@ from .infant_feeding_admin import InfantFeedingAdmin
 from .infant_feeding_practices_admin import InfantFeedingPracticesAdmin
 from .offschedule_admin import ChildOffScheduleAdmin
 from .child_covid_19_admin import Covid19Admin
+from .child_requisition_admin import ChildRequisitionAdmin
